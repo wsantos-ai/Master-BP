@@ -32,8 +32,8 @@ async function main() {
   console.log(`Assistentes semeados: ${CATALOGO.length}`);
 
   // BP de teste — apenas para desenvolvimento local.
-  const email = 'bp@exemplo.com.br';
-  const senha = 'MasterBP2026';
+  const email = 'me@wellington-santos.com';
+  const senha = 'santi@2026';
   const bp = await prisma.usuario.upsert({
     where: { email },
     update: {},
@@ -45,6 +45,20 @@ async function main() {
     },
   });
   console.log(`BP de teste: ${email} / ${senha}`);
+
+  const email2 = 'eliel.donza@gmail.com';
+  const senha2 = 'masterbp@2026';
+  await prisma.usuario.upsert({
+    where: { email: email2 },
+    update: {},
+    create: {
+      email: email2,
+      nome: 'Eliel Donza',
+      senhaHash: await bcrypt.hash(senha2, 10),
+      organizacao: 'Organização Demonstração',
+    },
+  });
+  console.log(`BP de teste: ${email2} / ${senha2}`);
 
   // Atendimento em andamento, com lacuna crítica aberta. Serve para o desenvolvedor ver a tela
   // sem gastar chamada ao modelo, e para o E2E exercitar o portão do Princípio II (SC-005).
