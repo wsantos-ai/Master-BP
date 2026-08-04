@@ -1,0 +1,192 @@
+// Modelo de dados do Master BP.
+//
+// Restrições do conector SQLite do Prisma (research.md R-03), aplicadas em todo o schema:
+//   - sem `enum`     → String, com união Zod em lib/validacao/comum.ts garantindo o valor
+//   - sem tipo `Json`→ String com JSON serializado, parseado por Zod na leitura
+//   - sem arrays escalares
+// Isso mantém a migração futura para PostgreSQL barata: troca de provider, não reescrita.
+//
+// Campos marcados "[cifrado]" guardam texto cifrado em repouso (lib/dados/cripto.ts, R-08).
+// Nenhum campo cifrado pode aparecer em `where`, `orderBy` ou índice.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  nome         String
+  senhaHash    String
+  organizacao  String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+
+  atendimentos Atendimento[]
+  auditoria    RegistroAuditoria[]
+
+  @@map("usuarios")
+}
+
+model Assistente {
+  id                String  @id
+  nome              String
+  descricao         String
+  /// JSON: lista de domínios de atuação
+  dominios          String
+  /// Caminho relativo em lib/agentes/ — somente leitura para a aplicação
+  arquivoPrompt     String
+  /// Identificador do schema Zod da entrega (lib/assistentes/estruturas)
+  estruturaEntrega  String
+  sensivelPorPadrao Boolean @default(false)
+  ativo             Boolean @default(true)
+
+  atendimentos Atendimento[]
+
+  @@map("assistentes")
+}
+
+model Atendimento {
+  id           String  @id @default(cuid())
+  autorId      String
+  assistenteId String
+
+  /// [cifrado] Relato inicial do BP
+  relatoInicial String
+  origemRelato  String @default("texto")
+
+  estado              String @default("em_andamento")
+  classificacaoSigilo String @default("padrao")
+
+  assistenteSugerido    String?
+  justificativaSugestao String?
+  trocaManual           Boolean @default(false)
+
+  /// SHA-256 do prompt canônico usado (Princípio IV)
+  promptHash String
+
+  criadoEm           DateTime  @default(now())
+  ultimaInteracaoEm  DateTime  @default(now())
+  concluidoEm        DateTime?
+  /// concluidoEm + 24 meses (FR-026)
+  expurgarEm         DateTime?
+
+  autor      Usuario    @relation(fields: [autorId], references: [id], onDelete: Cascade)
+  assistente Assistente @relation(fields: [assistenteId], references: [id])
+
+  lacunas       Lacuna[]
+  mensagens     MensagemRefinamento[]
+  entrega       Entrega?
+  escalonamentos SinalizacaoEscalonamento[]
+  auditoria     RegistroAuditoria[]
+
+  @@index([autorId, criadoEm])
+  @@index([estado, ultimaInteracaoEm])
+  @@index([expurgarEm])
+  @@map("atendimentos")
+}
+
+/// Informação que falta para a entrega poder ser emitida.
+/// É o que torna o Princípio II verificável: o portão lê este estado, não a opinião do modelo.
+model Lacuna {
+  id            String @id @default(cuid())
+  atendimentoId String
+
+  /// [cifrado] Pergunta objetiva ao BP
+  pergunta String
+  /// [cifrado] Por que esta informação importa — exibido na recusa de entrega
+  porQueImporta String
+  critica  Boolean @default(true)
+  estado   String  @default("aberta")
+
+  /// [cifrado] Obrigatória quando estado = respondida
+  resposta String?
+  /// [cifrado] Obrigatória quando estado = nao_aplicavel (FR-008)
+  justificativaNaoAplicavel String?
+
+  ordem      Int
+  criadaEm   DateTime  @default(now())
+  resolvidaEm DateTime?
+
+  atendimento Atendimento @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+
+  @@index([atendimentoId, ordem])
+  @@map("lacunas")
+}
+
+model MensagemRefinamento {
+  id            String @id @default(cuid())
+  atendimentoId String
+
+  autor String
+  /// [cifrado]
+  conteudo String
+  criadaEm DateTime @default(now())
+
+  atendimento Atendimento @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+
+  @@index([atendimentoId, criadaEm])
+  @@map("mensagens_refinamento")
+}
+
+model Entrega {
+  id            String @id @default(cuid())
+  atendimentoId String @unique
+
+  estruturaAplicada String
+  /// [cifrado] JSON da entrega estruturada, validada contra o schema da especialidade
+  conteudo String
+  /// [cifrado] JSON dos itens de plano de ação (FR-011)
+  planoAcao String
+
+  marcacaoSigilo String  @default("publico_interno")
+  notaGuarda     String?
+  versaoModelo   String
+  geradaEm       DateTime @default(now())
+
+  atendimento Atendimento @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+
+  @@map("entregas")
+}
+
+/// Risco jurídico detectado (Princípio III). Basta uma das duas camadas sinalizar.
+model SinalizacaoEscalonamento {
+  id            String @id @default(cuid())
+  atendimentoId String
+
+  tipoRisco            String
+  instanciaRecomendada String
+  origemDeteccao       String
+  /// [cifrado] Evidência que disparou a detecção
+  trechoGatilho String?
+  detectadaEm   DateTime @default(now())
+
+  atendimento Atendimento @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+
+  @@index([atendimentoId])
+  @@map("sinalizacoes_escalonamento")
+}
+
+/// Trilha exigida pelo Princípio I. Não é apagada no expurgo de retenção — é anonimizada.
+model RegistroAuditoria {
+  id            String  @id @default(cuid())
+  atendimentoId String?
+  usuarioId     String?
+
+  acao       String
+  ocorridoEm DateTime @default(now())
+  /// JSON com metadados da ação (formato de exportação, motivo da exclusão)
+  detalhe String?
+
+  atendimento Atendimento? @relation(fields: [atendimentoId], references: [id], onDelete: SetNull)
+  usuario     Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([atendimentoId])
+  @@index([usuarioId, ocorridoEm])
+  @@map("registros_auditoria")
+}

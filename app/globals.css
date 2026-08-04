@@ -1,0 +1,120 @@
+:root {
+  --fundo: #f6f7f9;
+  --superficie: #ffffff;
+  --borda: #dfe3e8;
+  --texto: #1c2430;
+  --texto-suave: #5a6675;
+  --acento: #1f4f8b;
+  --acento-suave: #eaf1fa;
+  --alerta-fundo: #fff4e5;
+  --alerta-borda: #d98324;
+  --alerta-texto: #7a4a05;
+  --perigo: #b3261e;
+  --sucesso: #1e6f45;
+  --raio: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.55;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+}
+
+a {
+  color: var(--acento);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--raio);
+  border: 1px solid var(--borda);
+  background: var(--superficie);
+  padding: 0.5rem 1rem;
+}
+
+button[data-variante='primario'] {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+textarea,
+input,
+select {
+  font: inherit;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  color: inherit;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+.cartao {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.suave {
+  color: var(--texto-suave);
+}
+
+.erro {
+  color: var(--perigo);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+}
+
+th,
+td {
+  border: 1px solid var(--borda);
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--acento-suave);
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 1rem 0.75rem 3rem;
+  }
+}
