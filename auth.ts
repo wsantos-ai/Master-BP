@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/dados/prisma';
 import { credenciaisLogin } from '@/lib/validacao/requisicoes';
+import { authConfig } from '@/auth.config';
 
 /**
  * Autenticação (FR-028, research.md R-07).
@@ -10,11 +11,13 @@ import { credenciaisLogin } from '@/lib/validacao/requisicoes';
  * Sessão em JWT dentro de cookie httpOnly. Credenciais bastam para a escala declarada; trocar
  * por SSO corporativo depois não mexe na camada de autorização, que consulta apenas
  * `sessao.user.id`.
+ *
+ * Roda em Node.js runtime (route handler, server components/actions) — nunca no middleware, que
+ * usa a config leve em auth.config.ts. Ver ali o porquê.
  */
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: 'jwt', maxAge: 60 * 60 * 8 },
-  pages: { signIn: '/entrar' },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -37,16 +40,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt: ({ token, user }) => {
-      if (user?.id) token.sub = user.id;
-      return token;
-    },
-    session: ({ session, token }) => {
-      if (token.sub) session.user.id = token.sub;
-      return session;
-    },
-  },
 });
 
 /** Id do BP autenticado, ou null. Toda rota que toca atendimento passa por aqui. */
