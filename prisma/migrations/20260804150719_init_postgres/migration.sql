@@ -1,29 +1,33 @@
 -- CreateTable
 CREATE TABLE "usuarios" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "nome" TEXT NOT NULL,
     "senhaHash" TEXT NOT NULL,
     "organizacao" TEXT,
     "ativo" BOOLEAN NOT NULL DEFAULT true,
-    "criadoEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "criadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "usuarios_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "assistentes" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "nome" TEXT NOT NULL,
     "descricao" TEXT NOT NULL,
     "dominios" TEXT NOT NULL,
     "arquivoPrompt" TEXT NOT NULL,
     "estruturaEntrega" TEXT NOT NULL,
     "sensivelPorPadrao" BOOLEAN NOT NULL DEFAULT false,
-    "ativo" BOOLEAN NOT NULL DEFAULT true
+    "ativo" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "assistentes_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "atendimentos" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "autorId" TEXT NOT NULL,
     "assistenteId" TEXT NOT NULL,
     "relatoInicial" TEXT NOT NULL,
@@ -34,17 +38,17 @@ CREATE TABLE "atendimentos" (
     "justificativaSugestao" TEXT,
     "trocaManual" BOOLEAN NOT NULL DEFAULT false,
     "promptHash" TEXT NOT NULL,
-    "criadoEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "ultimaInteracaoEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "concluidoEm" DATETIME,
-    "expurgarEm" DATETIME,
-    CONSTRAINT "atendimentos_autorId_fkey" FOREIGN KEY ("autorId") REFERENCES "usuarios" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "atendimentos_assistenteId_fkey" FOREIGN KEY ("assistenteId") REFERENCES "assistentes" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    "criadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ultimaInteracaoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "concluidoEm" TIMESTAMP(3),
+    "expurgarEm" TIMESTAMP(3),
+
+    CONSTRAINT "atendimentos_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "lacunas" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "atendimentoId" TEXT NOT NULL,
     "pergunta" TEXT NOT NULL,
     "porQueImporta" TEXT NOT NULL,
@@ -53,24 +57,26 @@ CREATE TABLE "lacunas" (
     "resposta" TEXT,
     "justificativaNaoAplicavel" TEXT,
     "ordem" INTEGER NOT NULL,
-    "criadaEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "resolvidaEm" DATETIME,
-    CONSTRAINT "lacunas_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "criadaEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolvidaEm" TIMESTAMP(3),
+
+    CONSTRAINT "lacunas_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "mensagens_refinamento" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "atendimentoId" TEXT NOT NULL,
     "autor" TEXT NOT NULL,
     "conteudo" TEXT NOT NULL,
-    "criadaEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "mensagens_refinamento_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "criadaEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "mensagens_refinamento_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "entregas" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "atendimentoId" TEXT NOT NULL,
     "estruturaAplicada" TEXT NOT NULL,
     "conteudo" TEXT NOT NULL,
@@ -78,32 +84,34 @@ CREATE TABLE "entregas" (
     "marcacaoSigilo" TEXT NOT NULL DEFAULT 'publico_interno',
     "notaGuarda" TEXT,
     "versaoModelo" TEXT NOT NULL,
-    "geradaEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "entregas_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "geradaEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "entregas_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "sinalizacoes_escalonamento" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "atendimentoId" TEXT NOT NULL,
     "tipoRisco" TEXT NOT NULL,
     "instanciaRecomendada" TEXT NOT NULL,
     "origemDeteccao" TEXT NOT NULL,
     "trechoGatilho" TEXT,
-    "detectadaEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "sinalizacoes_escalonamento_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "detectadaEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "sinalizacoes_escalonamento_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "registros_auditoria" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "atendimentoId" TEXT,
     "usuarioId" TEXT,
     "acao" TEXT NOT NULL,
-    "ocorridoEm" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ocorridoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "detalhe" TEXT,
-    CONSTRAINT "registros_auditoria_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "registros_auditoria_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "usuarios" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+
+    CONSTRAINT "registros_auditoria_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -135,3 +143,27 @@ CREATE INDEX "registros_auditoria_atendimentoId_idx" ON "registros_auditoria"("a
 
 -- CreateIndex
 CREATE INDEX "registros_auditoria_usuarioId_ocorridoEm_idx" ON "registros_auditoria"("usuarioId", "ocorridoEm");
+
+-- AddForeignKey
+ALTER TABLE "atendimentos" ADD CONSTRAINT "atendimentos_autorId_fkey" FOREIGN KEY ("autorId") REFERENCES "usuarios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "atendimentos" ADD CONSTRAINT "atendimentos_assistenteId_fkey" FOREIGN KEY ("assistenteId") REFERENCES "assistentes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lacunas" ADD CONSTRAINT "lacunas_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "mensagens_refinamento" ADD CONSTRAINT "mensagens_refinamento_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "entregas" ADD CONSTRAINT "entregas_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sinalizacoes_escalonamento" ADD CONSTRAINT "sinalizacoes_escalonamento_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "registros_auditoria" ADD CONSTRAINT "registros_auditoria_atendimentoId_fkey" FOREIGN KEY ("atendimentoId") REFERENCES "atendimentos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "registros_auditoria" ADD CONSTRAINT "registros_auditoria_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;

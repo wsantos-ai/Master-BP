@@ -16,7 +16,8 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:risco": "vitest run --project unit tests/unit/deteccao-risco.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@google/genai": "^0.14.0",
