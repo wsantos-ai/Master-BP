@@ -19,7 +19,7 @@ Três controles são avaliados **no servidor**, sobre o estado persistido, e nã
 | Detecção de risco jurídico | [lib/dominio/deteccao-risco.ts](lib/dominio/deteccao-risco.ts) | SC-004 não tolera falso negativo em escalonamento |
 | Conformidade estrutural | [lib/assistentes/estruturas/](lib/assistentes/estruturas/) | SC-003 exige 100% das seções obrigatórias |
 
-O Gemini devolve `prontoParaEntrega` e uma classificação de risco — ambos tratados como
+O modelo devolve `prontoParaEntrega` e uma classificação de risco — ambos tratados como
 **sinal, não decisão**. Um prompt não é testável em unidade e não sobrevive à troca de modelo.
 
 O comportamento de cada assistente vem dos prompts canônicos em
@@ -29,8 +29,8 @@ reescritos em código. O hash SHA-256 do prompt é gravado em cada atendimento: 
 
 ## Stack
 
-TypeScript · Next.js 15 (App Router) · React 19 · Prisma + SQLite · Zod · Auth.js ·
-Gemini · Vitest · Playwright
+TypeScript · Next.js 15 (App Router) · React 19 · Prisma + PostgreSQL · Zod · Auth.js ·
+OpenRouter (DeepSeek V4 Flash + Voxtral Mini Transcribe) · Vitest · Playwright
 
 ## Setup
 
@@ -54,13 +54,24 @@ BP de teste semeado: `bp@exemplo.com.br` / `MasterBP2026`.
 | Variável | Para quê |
 |---|---|
 | `DATABASE_URL` | Banco SQLite local (`file:./dev.db`) |
-| `GEMINI_API_KEY` | Chave do Gemini. **Só no servidor** — nunca prefixar com `NEXT_PUBLIC_` |
+| `OPENROUTER_API_KEY` | Chave do OpenRouter — provedor único de IA. **Só no servidor** — nunca prefixar com `NEXT_PUBLIC_` |
 | `AUTH_SECRET` | Segredo de sessão do Auth.js |
 | `CHAVE_CRIPTO` | 32 bytes em base64. Cifra relato, diálogo e entrega em repouso |
 | `CRON_SECRET` | Protege a rota de retenção agendada |
-| `GEMINI_MODELO_RAPIDO` / `GEMINI_MODELO_CAPAZ` | Opcionais — sobrescrevem os modelos padrão |
+| `OPENROUTER_MODELO_RAPIDO` / `OPENROUTER_MODELO_CAPAZ` | Opcionais — sobrescrevem o modelo de texto padrão (`deepseek/deepseek-v4-flash-0731`) |
+| `OPENROUTER_MODELO_TRANSCRICAO` | Opcional — sobrescreve o modelo de transcrição padrão (`mistralai/voxtral-mini-transcribe`) |
 
 Sem `CHAVE_CRIPTO` a aplicação não opera: o Princípio I não admite fase de carência.
+
+### Política de dados no provedor (obrigatório)
+
+Toda requisição envia `provider: { data_collection: "deny", zdr: true }`, restringindo o
+roteamento a provedores que não armazenam o conteúdo. Isso **não basta sozinho**: nas
+configurações de privacidade da conta OpenRouter é preciso desativar o roteamento para
+provedores que treinam sobre os dados, **para modelos pagos e gratuitos**.
+
+Atendimentos carregam relato de colaborador e áudio de voz. Enquanto esse passo não for feito, o
+Princípio I não está satisfeito, por mais que o código faça a sua parte.
 
 ## Testes
 
@@ -100,7 +111,7 @@ lib/
   agentes/      prompts canônicos (.md) — fonte única do comportamento, só leitura
   assistentes/  catálogo, carregador de prompts, schemas de entrega
   dominio/      controles constitucionais — testáveis sem servidor e sem modelo
-  ia/           integração com o Gemini
+  ia/           integração com o OpenRouter — cliente, saída estruturada, transcrição
   dados/        Prisma, cifragem, auditoria, retenção
   exportacao/   entrega → Markdown, DOCX, HTML de impressão
 prisma/         schema e migrações

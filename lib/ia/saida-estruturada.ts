@@ -1,15 +1,20 @@
 import 'server-only';
 import type { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { ErroConfiguracaoIA, MODELO_CAPAZ, obterCliente } from './gemini';
+import { ErroConfiguracaoIA, MODELO_CAPAZ, chamarChat } from './openrouter';
 import { logger } from '@/lib/observabilidade/logger';
 
 /**
  * Saída estruturada validada por Zod (research.md R-02).
  *
- * O schema Zod é a fonte única: dele derivamos o `responseSchema` enviado ao provedor, para que
- * os dois nunca divirjam. A resposta é validada antes de qualquer persistência — reprovar aqui é
- * o que torna o Princípio V uma verificação booleana, não uma leitura otimista.
+ * O schema Zod é a fonte única: dele derivamos o schema enviado ao provedor, para que os dois
+ * nunca divirjam na forma. Mas a autoridade não é simétrica — **o schema do provedor é uma
+ * orientação de formato; o Zod é o contrato**. O modo estrito do OpenRouter não aceita as
+ * restrições de valor que nossos schemas usam (`min`, `max`, `maxItems`), então elas são
+ * removidas do que vai para o modelo e permanecem apenas aqui, onde reprovam de verdade.
+ *
+ * A resposta é validada antes de qualquer persistência — reprovar aqui é o que torna o
+ * Princípio V uma verificação booleana, não uma leitura otimista.
  *
  * Até 2 retentativas. Esgotadas, o chamador recebe erro e NADA é gravado: entrega parcial é
  * pior que ausência de entrega.
@@ -31,35 +36,66 @@ export class ErroSaidaEstruturada extends Error {
 }
 
 /**
- * O `responseSchema` do Gemini aceita um subconjunto do JSON Schema. Removemos as chaves que
- * ele não entende, preservando a estrutura que importa.
+ * Chaves que o modo estrito do provedor não aceita (contracts/provedor-ia.md §2.2).
+ *
+ * Removê-las não afrouxa nada: cada uma delas continua existindo no schema Zod, que é quem
+ * decide se a resposta entra ou não no banco.
+ */
+const NAO_SUPORTADAS = new Set([
+  '$schema',
+  '$ref',
+  'definitions',
+  '$defs',
+  'default',
+  'const',
+  'minLength',
+  'maxLength',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'minItems',
+  'maxItems',
+  'pattern',
+  'format',
+]);
+
+/**
+ * Converte um JSON Schema 7 para o dialeto estrito do provedor:
+ * todo objeto ganha `additionalProperties: false` e passa a exigir todas as suas propriedades.
  */
 export function paraSchemaDoProvedor(schemaJson: unknown): unknown {
   if (Array.isArray(schemaJson)) return schemaJson.map(paraSchemaDoProvedor);
   if (schemaJson === null || typeof schemaJson !== 'object') return schemaJson;
 
-  const naoSuportadas = new Set([
-    '$schema',
-    '$ref',
-    'additionalProperties',
-    'definitions',
-    '$defs',
-    'default',
-    'const',
-    'exclusiveMinimum',
-    'exclusiveMaximum',
-  ]);
-
+  const entrada = schemaJson as Record<string, unknown>;
   const saida: Record<string, unknown> = {};
-  for (const [chave, valor] of Object.entries(schemaJson as Record<string, unknown>)) {
-    if (naoSuportadas.has(chave)) continue;
+
+  for (const [chave, valor] of Object.entries(entrada)) {
+    if (NAO_SUPORTADAS.has(chave)) continue;
     saida[chave] = paraSchemaDoProvedor(valor);
   }
+
+  if (entrada.type === 'object' && typeof entrada.properties === 'object') {
+    saida.additionalProperties = false;
+    // O modo estrito exige que `required` liste TODAS as propriedades. Campos opcionais no Zod
+    // continuam opcionais no Zod — aqui eles apenas passam a ser sempre pedidos ao modelo.
+    saida.required = Object.keys(entrada.properties as Record<string, unknown>);
+  }
+
   return saida;
 }
 
 export function derivarSchema<T extends z.ZodTypeAny>(schema: T): unknown {
-  return paraSchemaDoProvedor(zodToJsonSchema(schema, { target: 'openApi3' }));
+  return paraSchemaDoProvedor(
+    zodToJsonSchema(schema, {
+      // `jsonSchema7`, e não `openApi3`: precisamos de `type: ["string","null"]` para os campos
+      // anuláveis, não do `nullable: true` que o modo estrito rejeita.
+      target: 'jsonSchema7',
+      // Sem `$ref`/`$defs`: o dialeto estrito não os resolve.
+      $refStrategy: 'none',
+    }),
+  );
 }
 
 export type OpcoesGeracao<T extends z.ZodTypeAny> = {
@@ -79,28 +115,10 @@ export type ChamadorModelo = (params: {
   entrada: string;
   schemaProvedor: unknown;
   temperatura: number;
+  evento: string;
 }) => Promise<string>;
 
-const chamadorPadrao: ChamadorModelo = async ({
-  modelo,
-  instrucaoSistema,
-  entrada,
-  schemaProvedor,
-  temperatura,
-}) => {
-  const cliente = obterCliente();
-  const resposta = await cliente.models.generateContent({
-    model: modelo,
-    contents: entrada,
-    config: {
-      systemInstruction: instrucaoSistema,
-      responseMimeType: 'application/json',
-      responseSchema: schemaProvedor as never,
-      temperature: temperatura,
-    },
-  });
-  return resposta.text ?? '';
-};
+const chamadorPadrao: ChamadorModelo = (params) => chamarChat(params);
 
 export async function gerarEstruturado<T extends z.ZodTypeAny>(
   opcoes: OpcoesGeracao<T>,
@@ -119,9 +137,11 @@ export async function gerarEstruturado<T extends z.ZodTypeAny>(
         entrada: opcoes.entrada,
         schemaProvedor,
         temperatura: opcoes.temperatura ?? 0.4,
+        evento: opcoes.evento,
       });
     } catch (erro) {
-      // Falta de chave é erro de configuração: retentar não resolve e só atrasa o diagnóstico.
+      // Falta ou invalidez de chave, falta de crédito, modelo inexistente: retentar não resolve
+      // e só atrasa o diagnóstico de quem opera.
       if (erro instanceof ErroConfiguracaoIA) throw erro;
 
       ultimoMotivo = erro instanceof Error ? erro.name : 'falha_provedor';

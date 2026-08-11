@@ -2,7 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { CATALOGO } from '@/lib/assistentes/catalogo';
 import { idAssistente } from '@/lib/validacao/comum';
-import { MODELO_RAPIDO } from './gemini';
+import { MODELO_RAPIDO } from './openrouter';
 import { type ChamadorModelo, gerarEstruturado } from './saida-estruturada';
 
 /**

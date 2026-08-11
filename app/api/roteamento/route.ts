@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { idUsuarioAutenticado } from '@/auth';
 import { rotear } from '@/lib/ia/roteador';
-import { ErroConfiguracaoIA } from '@/lib/ia/gemini';
+import { ErroConfiguracaoIA } from '@/lib/ia/openrouter';
 import { ErroSaidaEstruturada } from '@/lib/ia/saida-estruturada';
 import { requisicaoRoteamento } from '@/lib/validacao/requisicoes';
 import { LIMITE_RELATO } from '@/lib/validacao/comum';

@@ -14,7 +14,7 @@ import {
   registrarEscalonamentos,
 } from '@/lib/dados/atendimentos';
 import { conduzirRefinamento } from '@/lib/ia/refinamento';
-import { ErroConfiguracaoIA, MODELO_CAPAZ } from '@/lib/ia/gemini';
+import { ErroConfiguracaoIA, MODELO_CAPAZ } from '@/lib/ia/openrouter';
 import { ErroSaidaEstruturada } from '@/lib/ia/saida-estruturada';
 import { filtrosHistorico, requisicaoCriarAtendimento } from '@/lib/validacao/requisicoes';
 import { respostaErro } from '@/lib/http/erros';

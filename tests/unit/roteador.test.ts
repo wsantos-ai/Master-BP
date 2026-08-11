@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ErroConfiguracaoIA } from '@/lib/ia/openrouter';
 import { interpretarRoteamento, rotear } from '@/lib/ia/roteador';
 
 const resposta = (corpo: unknown) => vi.fn().mockResolvedValue(JSON.stringify(corpo));
+
+describe('propagação de erro de configuração', () => {
+  it('não retenta quando a chave do provedor está ausente', async () => {
+    const chamador = vi.fn().mockRejectedValue(new ErroConfiguracaoIA('OPENROUTER_API_KEY ausente'));
+
+    await expect(rotear('relato qualquer', chamador)).rejects.toThrow(ErroConfiguracaoIA);
+    expect(chamador).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('interpretação do roteamento', () => {
   it('devolve a especialidade indicada com nome e justificativa', () => {

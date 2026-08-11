@@ -7,7 +7,7 @@ coverage/
 playwright-report/
 test-results/
 
-# Ambiente — nunca versionar chaves (API_GEMINI_KEY, AUTH_SECRET, CHAVE_CRIPTO)
+# Ambiente — nunca versionar chaves (OPENROUTER_API_KEY, AUTH_SECRET, CHAVE_CRIPTO)
 .env
 .env.local
 .env.*.local

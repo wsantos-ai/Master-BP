@@ -3,7 +3,7 @@ import type { EspecialidadeAssistente } from '@/lib/assistentes/catalogo';
 import { carregarPrompt } from '@/lib/assistentes/prompt-loader';
 import { extrairPlanoAcao, obterEstrutura } from '@/lib/assistentes/estruturas';
 import { avaliarVedacaoPunitiva, haFatosApurados } from '@/lib/dominio/vedacao-punitiva';
-import { MODELO_CAPAZ } from './gemini';
+import { MODELO_CAPAZ } from './openrouter';
 import { type ChamadorModelo, gerarEstruturado } from './saida-estruturada';
 
 /**

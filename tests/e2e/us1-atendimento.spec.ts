@@ -4,7 +4,7 @@ import { entrar } from './ajuda';
 /**
  * US1 — cenários de aceite da spec.
  *
- * As chamadas ao Gemini são interceptadas: o que se testa aqui é o fluxo do app e as garantias
+ * As chamadas ao provedor são interceptadas: o que se testa aqui é o fluxo do app e as garantias
  * do servidor, não a qualidade da resposta do modelo. A resposta real é coberta pelos testes de
  * contrato, fora do pipeline padrão.
  */

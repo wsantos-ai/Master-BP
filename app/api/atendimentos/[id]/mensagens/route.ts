@@ -15,7 +15,7 @@ import { exigirEspecialidade } from '@/lib/assistentes/catalogo';
 import { avaliarPortao, proximaOrdem, reconciliarComSinalDoModelo } from '@/lib/dominio/portao-refinamento';
 import { detectarRisco, mensagemEscalonamento } from '@/lib/dominio/deteccao-risco';
 import { conduzirRefinamento } from '@/lib/ia/refinamento';
-import { MODELO_CAPAZ } from '@/lib/ia/gemini';
+import { ErroConfiguracaoIA, MODELO_CAPAZ } from '@/lib/ia/openrouter';
 import { ErroSaidaEstruturada } from '@/lib/ia/saida-estruturada';
 import { requisicaoMensagem } from '@/lib/validacao/requisicoes';
 import { respostaErro, respostaNaoEncontrado } from '@/lib/http/erros';
@@ -74,9 +74,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     });
   } catch (erro) {
     // A resposta do BP já foi persistida: nada se perde na indisponibilidade (contracts/api.md).
+    const tipo = (erro as Error).name;
+
+    // Chave ausente, inválida, sem crédito ou modelo inexistente. Dizer "indisponível" aqui
+    // mandaria quem opera procurar o problema no provedor, e ele está no ambiente.
+    if (erro instanceof ErroConfiguracaoIA) {
+      logger.erro('refinamento.configuracao_ausente', { atendimentoId: id, tipo });
+      return respostaErro(
+        'ERRO_INTERNO',
+        'Os assistentes não estão configurados neste ambiente. Verifique a chave do provedor.',
+      );
+    }
+
     logger.erro('refinamento.falhou', {
       atendimentoId: id,
-      tipo: (erro as Error).name,
+      tipo,
       motivo: erro instanceof ErroSaidaEstruturada ? erro.motivo : undefined,
       modelo: MODELO_CAPAZ,
     });

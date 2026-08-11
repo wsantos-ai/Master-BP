@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tipoRisco } from '@/lib/validacao/comum';
 import type { EspecialidadeAssistente } from '@/lib/assistentes/catalogo';
 import { carregarPrompt } from '@/lib/assistentes/prompt-loader';
-import { MODELO_CAPAZ } from './gemini';
+import { MODELO_CAPAZ } from './openrouter';
 import { type ChamadorModelo, gerarEstruturado } from './saida-estruturada';
 
 /**
