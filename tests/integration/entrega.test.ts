@@ -61,7 +61,7 @@ describe('portão de entrega sobre o estado persistido', () => {
     const portao = avaliarPortao(lacunas);
 
     expect(portao.liberada).toBe(false);
-    expect(portao.pendentes).toHaveLength(2);
+    expect(portao.apresentadas).toHaveLength(2);
   });
 
   it('continua recusando com apenas uma crítica respondida', async () => {
@@ -70,7 +70,7 @@ describe('portão de entrega sobre o estado persistido', () => {
 
     const atualizadas = (await listarLacunas(atendimentoId, bp.id))!;
     expect(avaliarPortao(atualizadas).liberada).toBe(false);
-    expect(avaliarPortao(atualizadas).pendentes).toHaveLength(1);
+    expect(avaliarPortao(atualizadas).apresentadas).toHaveLength(1);
   });
 
   it('libera quando as duas críticas são resolvidas, mesmo com a não crítica aberta', async () => {

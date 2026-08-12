@@ -44,7 +44,13 @@ Além de conduzir o atendimento conforme suas instruções, você deve estrutura
 - "novasLacunas": informações que ainda faltam para você poder emitir a entrega final. Marque
   "critica": true quando a ausência daquela informação impedir uma conclusão segura.
   "porQueImporta" explica ao BP, em uma frase, por que você precisa daquele dado.
-- "lacunasResolvidas": ids das lacunas que a última resposta do BP resolveu.
+  NUNCA repita nem reformule uma pergunta já feita neste atendimento. Antes de propor uma
+  pergunta, verifique as duas listas da entrada: se o assunto já foi perguntado — mesmo com
+  outras palavras —, não proponha de novo. Reperguntar o que o BP já respondeu destrói a
+  confiança dele na entrega final. Se nada de novo faltar, devolva "novasLacunas" vazio.
+- "lacunasResolvidas": ids das lacunas que a última resposta do BP resolveu — inclusive lacunas
+  abertas que ela esclareceu de passagem, não só aquela que foi perguntada. Use os ids entre
+  colchetes na entrada.
 - "risco": marque "detectado": true e liste os tipos quando a situação envolver assédio moral ou
   sexual, discriminação, fraude, demissão por justa causa, risco de ação trabalhista ou
   tratamento de dado pessoal sensível. Na dúvida, sinalize.
@@ -60,22 +66,33 @@ export type ContextoRefinamento = {
   ultimaMensagemDoBp?: string;
 };
 
+/**
+ * As perguntas já feitas entram em DOIS blocos rotulados, não em uma lista única com o estado
+ * ao lado. A distinção entre "já respondida" e "ainda aberta" passa a ser estrutural, em vez de
+ * depender do modelo interpretar um sufixo — e o bloco das respondidas leva a instrução junto,
+ * onde ela é mais difícil de ignorar (FR-008).
+ */
 export function montarEntrada(contexto: ContextoRefinamento): string {
-  const historico = contexto.lacunas
-    .map((l) => {
-      const situacao =
-        l.estado === 'respondida'
-          ? `respondida: ${l.resposta}`
-          : l.estado === 'nao_aplicavel'
-            ? 'declarada não aplicável pelo BP'
-            : 'ainda aberta';
-      return `- [${l.id}] ${l.pergunta} → ${situacao}`;
-    })
+  const resolvidas = contexto.lacunas
+    .filter((l) => l.estado === 'respondida' || l.estado === 'nao_aplicavel')
+    .map((l) =>
+      l.estado === 'respondida'
+        ? `- [${l.id}] ${l.pergunta}\n  Resposta do BP: ${l.resposta}`
+        : `- [${l.id}] ${l.pergunta}\n  O BP declarou que não se aplica.`,
+    )
+    .join('\n');
+
+  const abertas = contexto.lacunas
+    .filter((l) => l.estado !== 'respondida' && l.estado !== 'nao_aplicavel')
+    .map((l) => `- [${l.id}] ${l.pergunta}`)
     .join('\n');
 
   return [
     `Relato inicial do Business Partner:\n${contexto.relato}`,
-    historico ? `\nPerguntas já feitas:\n${historico}` : '',
+    resolvidas
+      ? `\nJÁ RESPONDIDAS — não pergunte nada disto de novo, nem com outras palavras:\n${resolvidas}`
+      : '',
+    abertas ? `\nAINDA ABERTAS — já perguntadas, aguardando resposta:\n${abertas}` : '',
     contexto.ultimaMensagemDoBp ? `\nÚltima resposta do BP:\n${contexto.ultimaMensagemDoBp}` : '',
   ]
     .filter(Boolean)

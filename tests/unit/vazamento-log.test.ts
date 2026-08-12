@@ -36,6 +36,36 @@ describe('redação de campos sensíveis', () => {
   });
 });
 
+/** Feature 003 — SC-007: o evento da rodada de refinamento é composto só de contagens. */
+describe('evento da rodada de refinamento', () => {
+  it('não carrega pergunta, resposta, justificativa nem relato', () => {
+    const espiao = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    // Exatamente a forma emitida por app/api/atendimentos/[id]/mensagens/route.ts.
+    logger.info('refinamento.rodada', {
+      atendimentoId: 'abc123',
+      propostas: 4,
+      descartadas: 2,
+      fechadasAproveitamento: 1,
+      sinaisIgnorados: 0,
+      criticasAbertas: 3,
+      apresentadas: 3,
+    });
+
+    const linha = espiao.mock.calls[0]![0] as string;
+    const registro = JSON.parse(linha) as { ctx: Record<string, unknown> };
+
+    // Só números e o identificador. Nenhuma chave de conteúdo.
+    for (const [chave, valor] of Object.entries(registro.ctx)) {
+      if (chave === 'atendimentoId') continue;
+      expect(typeof valor).toBe('number');
+    }
+    expect(Object.keys(registro.ctx)).not.toContain('pergunta');
+    expect(Object.keys(registro.ctx)).not.toContain('resposta');
+    expect(Object.keys(registro.ctx)).not.toContain('relato');
+  });
+});
+
 describe('escrita no console', () => {
   it('não emite conteúdo sensível na linha de log', () => {
     const espia = vi.spyOn(console, 'log').mockImplementation(() => {});

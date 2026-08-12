@@ -58,7 +58,7 @@ export default async function PaginaAtendimento({
           autor: m.autor,
           conteudo: m.conteudo,
         }))}
-        lacunasIniciais={portao.pendentes}
+        lacunasIniciais={portao.apresentadas}
         prontoInicial={portao.liberada}
         escalonamentos={sinais}
         avisoEscalonamento={mensagemEscalonamento(sinais)}

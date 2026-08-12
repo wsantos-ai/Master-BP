@@ -42,6 +42,8 @@ export type AtendimentoDecifrado = {
   expurgarEm: Date | null;
 };
 
+export type OrigemFechamento = 'resposta_direta' | 'aproveitada';
+
 export type LacunaDecifrada = {
   id: string;
   pergunta: string;
@@ -50,6 +52,8 @@ export type LacunaDecifrada = {
   estado: EstadoLacuna;
   resposta: string | null;
   justificativaNaoAplicavel: string | null;
+  /** Nulo enquanto aberta, quando não aplicável, e em lacunas anteriores à feature 003. */
+  origemFechamento: OrigemFechamento | null;
   ordem: number;
 };
 
@@ -86,6 +90,7 @@ export function decifrarLacuna(registro: {
   estado: string;
   resposta: string | null;
   justificativaNaoAplicavel: string | null;
+  origemFechamento: string | null;
   ordem: number;
 }): LacunaDecifrada {
   return {
@@ -95,6 +100,8 @@ export function decifrarLacuna(registro: {
     estado: registro.estado as EstadoLacuna,
     resposta: decifrarOpcional(registro.resposta),
     justificativaNaoAplicavel: decifrarOpcional(registro.justificativaNaoAplicavel),
+    // Rótulo de enumeração, não conteúdo de atendimento: fica em claro, como estado e ordem.
+    origemFechamento: registro.origemFechamento as OrigemFechamento | null,
   };
 }
 
@@ -218,7 +225,41 @@ export async function responderLacuna(
 ): Promise<void> {
   await prisma.lacuna.updateMany({
     where: { id: lacunaId, atendimentoId },
-    data: { estado: 'respondida', resposta: cifrar(resposta), resolvidaEm: new Date() },
+    data: {
+      estado: 'respondida',
+      resposta: cifrar(resposta),
+      origemFechamento: 'resposta_direta',
+      resolvidaEm: new Date(),
+    },
+  });
+}
+
+/**
+ * Fecha as lacunas que a resposta do BP esclareceu de passagem (FR-001, FR-004).
+ *
+ * Grava o conteúdo REAL do BP em cada uma — nunca resposta vazia. É isso que mantém
+ * `lacunaResolvida()` válido sem alteração e o Princípio II fora do alcance do modelo
+ * (research.md R-03).
+ *
+ * O `estado: 'aberta'` no filtro é a última barreira: mesmo que a decisão a montante falhe,
+ * nenhuma lacuna já resolvida é sobrescrita.
+ */
+export async function fecharLacunasAproveitadas(
+  atendimentoId: string,
+  lacunaIds: string[],
+  conteudoDoBp: string,
+): Promise<void> {
+  if (lacunaIds.length === 0) return;
+  if (conteudoDoBp.trim().length === 0) return;
+
+  await prisma.lacuna.updateMany({
+    where: { id: { in: lacunaIds }, atendimentoId, estado: 'aberta' },
+    data: {
+      estado: 'respondida',
+      resposta: cifrar(conteudoDoBp),
+      origemFechamento: 'aproveitada',
+      resolvidaEm: new Date(),
+    },
   });
 }
 

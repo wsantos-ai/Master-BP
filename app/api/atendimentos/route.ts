@@ -5,6 +5,7 @@ import { carregarPrompt } from '@/lib/assistentes/prompt-loader';
 import { classificarAtendimento } from '@/lib/dominio/classificacao-sigilo';
 import { detectarRisco, mensagemEscalonamento } from '@/lib/dominio/deteccao-risco';
 import { avaliarPortao } from '@/lib/dominio/portao-refinamento';
+import { filtrarPropostas } from '@/lib/dominio/equivalencia-lacunas';
 import {
   criarAtendimento,
   criarLacunas,
@@ -84,7 +85,10 @@ export async function POST(req: NextRequest) {
     classificacaoSigilo: classificacao,
   });
 
-  await criarLacunas(atendimento.id, refinamento.novasLacunas, 1);
+  // A primeira rodada também é uma rodada: o modelo pode propor duas formulações do mesmo
+  // pedido logo de saída (FR-006, R-05). Nada existente com que comparar, só as propostas entre si.
+  const { aceitas: lacunasIniciais } = filtrarPropostas(refinamento.novasLacunas, []);
+  await criarLacunas(atendimento.id, lacunasIniciais, 1);
   await registrarMensagem(atendimento.id, 'bp', relato);
   await registrarMensagem(atendimento.id, 'assistente', refinamento.mensagem);
   await registrarEscalonamentos(
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest) {
       estado: atendimento.estado,
       classificacaoSigilo: classificacao,
       mensagem: refinamento.mensagem,
-      lacunasAbertas: portao.pendentes,
+      lacunasAbertas: portao.apresentadas,
       prontoParaEntrega: portao.liberada,
       escalonamentos: sinais,
       avisoEscalonamento: mensagemEscalonamento(sinais),

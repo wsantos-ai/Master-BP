@@ -109,6 +109,12 @@ model Lacuna {
   /// [cifrado] Obrigatória quando estado = nao_aplicavel (FR-008)
   justificativaNaoAplicavel String?
 
+  /// Como esta lacuna foi fechada: "resposta_direta" (o BP respondeu esta pergunta) ou
+  /// "aproveitada" (a resposta dada a outra pergunta também esclareceu esta). Nulo enquanto
+  /// aberta, quando declarada não aplicável, e em lacunas fechadas antes de a origem passar a
+  /// ser registrada — nulo antigo é informação honesta, não falha.
+  origemFechamento String?
+
   ordem      Int
   criadaEm   DateTime  @default(now())
   resolvidaEm DateTime?

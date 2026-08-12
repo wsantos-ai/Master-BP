@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LIMITE_APRESENTADAS,
   type LacunaAvaliavel,
   avaliarPortao,
   lacunaResolvida,
@@ -61,8 +62,8 @@ describe('portão de entrega', () => {
   it('bloqueia quando há lacuna crítica aberta', () => {
     const avaliacao = avaliarPortao([lacuna()]);
     expect(avaliacao.liberada).toBe(false);
-    expect(avaliacao.pendentes).toHaveLength(1);
-    expect(avaliacao.pendentes[0]?.porQueImporta).toContain('contraditório');
+    expect(avaliacao.apresentadas).toHaveLength(1);
+    expect(avaliacao.apresentadas[0]?.porQueImporta).toContain('contraditório');
   });
 
   it('libera quando todas as críticas estão resolvidas', () => {
@@ -93,7 +94,7 @@ describe('portão de entrega', () => {
       lacuna({ id: 'a', ordem: 1 }),
       lacuna({ id: 'b', ordem: 2 }),
     ]);
-    expect(avaliacao.pendentes.map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    expect(avaliacao.apresentadas.map((p) => p.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('conta resolvidas e abertas separadamente', () => {
@@ -104,6 +105,113 @@ describe('portão de entrega', () => {
     ]);
     expect(avaliacao.totalResolvidas).toBe(1);
     expect(avaliacao.totalAbertas).toBe(2);
+  });
+});
+
+/** US2 — FR-007, FR-014, FR-015, FR-016. */
+describe('limite de apresentação e fila', () => {
+  function criticas(quantidade: number): LacunaAvaliavel[] {
+    return Array.from({ length: quantidade }, (_, i) =>
+      lacuna({ id: `l${i + 1}`, ordem: i + 1, pergunta: `Pergunta ${i + 1}?` }),
+    );
+  }
+
+  it('apresenta no máximo 3, mesmo com 7 abertas', () => {
+    const avaliacao = avaliarPortao(criticas(7));
+
+    expect(avaliacao.apresentadas).toHaveLength(LIMITE_APRESENTADAS);
+    expect(avaliacao.totalCriticasAbertas).toBe(7);
+  });
+
+  it('apresenta todas quando há menos que o limite', () => {
+    const avaliacao = avaliarPortao(criticas(2));
+
+    expect(avaliacao.apresentadas).toHaveLength(2);
+    expect(avaliacao.totalCriticasAbertas).toBe(2);
+  });
+
+  it('apresenta as primeiras por ordem, nunca uma seleção arbitrária', () => {
+    const avaliacao = avaliarPortao(criticas(7));
+    expect(avaliacao.apresentadas.map((p) => p.id)).toEqual(['l1', 'l2', 'l3']);
+  });
+
+  it('promove a próxima da fila quando uma apresentada é resolvida (FR-015)', () => {
+    const lacunas = criticas(5);
+    lacunas[0] = { ...lacunas[0]!, estado: 'respondida', resposta: 'respondida pelo BP' };
+
+    const avaliacao = avaliarPortao(lacunas);
+
+    expect(avaliacao.apresentadas.map((p) => p.id)).toEqual(['l2', 'l3', 'l4']);
+    expect(avaliacao.totalCriticasAbertas).toBe(4);
+  });
+
+  it('devolve as mesmas 3, na mesma ordem, em avaliações repetidas (SC-011)', () => {
+    const lacunas = criticas(6);
+    // Embaralhar a entrada simula a retomada, em que a ordem de leitura pode variar.
+    const embaralhadas = [...lacunas].reverse();
+
+    expect(avaliarPortao(embaralhadas).apresentadas.map((p) => p.id)).toEqual(
+      avaliarPortao(lacunas).apresentadas.map((p) => p.id),
+    );
+  });
+
+  it('lacunas NÃO críticas ficam fora do limite e não bloqueiam (FR-016)', () => {
+    const lacunas = [
+      ...criticas(2),
+      lacuna({ id: 'n1', ordem: 10, critica: false }),
+      lacuna({ id: 'n2', ordem: 11, critica: false }),
+      lacuna({ id: 'n3', ordem: 12, critica: false }),
+    ];
+
+    const avaliacao = avaliarPortao(lacunas);
+
+    expect(avaliacao.apresentadas.map((p) => p.id)).toEqual(['l1', 'l2']);
+    expect(avaliacao.totalCriticasAbertas).toBe(2);
+    expect(avaliacao.totalAbertas).toBe(5);
+  });
+});
+
+/**
+ * 🚨 FR-014 / SC-010 — a linha vermelha da feature.
+ *
+ * Se estes testes caírem, a entrega passa a sair com pendência crítica na fila: o limite de
+ * apresentação terá vazado para dentro da decisão do portão, e o Princípio II está quebrado.
+ */
+describe('o limite de apresentação NÃO afrouxa o portão', () => {
+  it('resolver as 3 apresentadas não libera enquanto houver fila', () => {
+    const lacunas = Array.from({ length: 7 }, (_, i) =>
+      lacuna({ id: `l${i + 1}`, ordem: i + 1 }),
+    );
+    // O BP resolveu exatamente o que via na tela.
+    for (let i = 0; i < LIMITE_APRESENTADAS; i++) {
+      lacunas[i] = { ...lacunas[i]!, estado: 'respondida', resposta: 'respondido' };
+    }
+
+    const avaliacao = avaliarPortao(lacunas);
+
+    expect(avaliacao.liberada).toBe(false);
+    expect(podeEmitirEntrega(lacunas)).toBe(false);
+    expect(avaliacao.totalCriticasAbertas).toBe(4);
+  });
+
+  it('só libera quando as apresentadas E as em fila estão resolvidas', () => {
+    const lacunas = Array.from({ length: 7 }, (_, i) =>
+      lacuna({ id: `l${i + 1}`, ordem: i + 1, estado: 'respondida', resposta: 'respondido' }),
+    );
+
+    expect(avaliarPortao(lacunas).liberada).toBe(true);
+    expect(podeEmitirEntrega(lacunas)).toBe(true);
+  });
+
+  it('proximaPergunta enxerga a fila inteira, não só as apresentadas', () => {
+    const lacunas = Array.from({ length: 7 }, (_, i) =>
+      lacuna({ id: `l${i + 1}`, ordem: i + 1 }),
+    );
+    for (let i = 0; i < LIMITE_APRESENTADAS; i++) {
+      lacunas[i] = { ...lacunas[i]!, estado: 'respondida', resposta: 'respondido' };
+    }
+
+    expect(proximaPergunta(lacunas)?.id).toBe('l4');
   });
 });
 

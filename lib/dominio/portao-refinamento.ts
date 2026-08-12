@@ -29,9 +29,20 @@ export type LacunaPendente = {
   porQueImporta: string;
 };
 
+/**
+ * Duas coisas distintas, deliberadamente separadas:
+ *
+ * - `liberada` é a DECISÃO, computada sobre TODAS as lacunas críticas não resolvidas.
+ * - `apresentadas` é o que o BP VÊ, limitado para a etapa não virar uma esteira.
+ *
+ * Elas viviam no mesmo campo e isso escondia uma armadilha: limitar o que se mostra é inofensivo,
+ * limitar o que se exige libera entrega com informação crítica faltando. Ver LIMITE_APRESENTADAS.
+ */
 export type AvaliacaoPortao = {
   liberada: boolean;
-  pendentes: LacunaPendente[];
+  apresentadas: LacunaPendente[];
+  /** Apresentadas + em fila. É este número que precisa cair a cada rodada. */
+  totalCriticasAbertas: number;
   totalAbertas: number;
   totalResolvidas: number;
 };
@@ -51,15 +62,37 @@ export function lacunaResolvida(lacuna: LacunaAvaliavel): boolean {
   return false;
 }
 
+/**
+ * Quantas pendências críticas o BP vê por vez (FR-007).
+ *
+ * 🚨 Participa EXCLUSIVAMENTE do cálculo de `apresentadas`. Se esta constante aparecer em
+ * qualquer expressão que produza `liberada`, `podeEmitirEntrega` ou `lacunaResolvida`, o
+ * Princípio II está quebrado: pendência fora da tela não é pendência resolvida.
+ *
+ * É escolha de experiência, não restrição técnica — ajustável aqui, num ponto só.
+ */
+export const LIMITE_APRESENTADAS = 3;
+
 export function avaliarPortao(lacunas: LacunaAvaliavel[]): AvaliacaoPortao {
   const naoResolvidas = lacunas.filter((l) => !lacunaResolvida(l));
-  const criticasAbertas = naoResolvidas.filter((l) => l.critica);
+  const criticasAbertas = naoResolvidas
+    .filter((l) => l.critica)
+    // Ordem crescente e imutável: é ela que define a fila, e é por isso que a retomada devolve
+    // sempre as mesmas perguntas, na mesma sequência.
+    .sort((a, b) => a.ordem - b.ordem);
 
   return {
+    // 🚨 Sobre TODAS as críticas abertas — apresentadas e em fila. LIMITE_APRESENTADAS não
+    // entra aqui, nem pode entrar: pendência fora da tela não é pendência resolvida.
     liberada: criticasAbertas.length === 0,
-    pendentes: criticasAbertas
-      .sort((a, b) => a.ordem - b.ordem)
-      .map((l) => ({ id: l.id, pergunta: l.pergunta, porQueImporta: l.porQueImporta })),
+    // As demais ficam em fila — derivada de `ordem`, sem coluna e sem estado a sincronizar.
+    // Elas continuam contando em `totalCriticasAbertas` e continuam bloqueando a entrega.
+    apresentadas: criticasAbertas.slice(0, LIMITE_APRESENTADAS).map((l) => ({
+      id: l.id,
+      pergunta: l.pergunta,
+      porQueImporta: l.porQueImporta,
+    })),
+    totalCriticasAbertas: criticasAbertas.length,
     totalAbertas: naoResolvidas.length,
     totalResolvidas: lacunas.length - naoResolvidas.length,
   };

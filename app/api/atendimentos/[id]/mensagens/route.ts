@@ -3,6 +3,7 @@ import { idUsuarioAutenticado } from '@/auth';
 import {
   buscarAtendimentoDoAutor,
   criarLacunas,
+  fecharLacunasAproveitadas,
   listarLacunas,
   marcarLacunaNaoAplicavel,
   marcarSensivel,
@@ -13,6 +14,8 @@ import {
 } from '@/lib/dados/atendimentos';
 import { exigirEspecialidade } from '@/lib/assistentes/catalogo';
 import { avaliarPortao, proximaOrdem, reconciliarComSinalDoModelo } from '@/lib/dominio/portao-refinamento';
+import { filtrarPropostas } from '@/lib/dominio/equivalencia-lacunas';
+import { aproveitarResolucoes } from '@/lib/dominio/resolucao-aproveitada';
 import { detectarRisco, mensagemEscalonamento } from '@/lib/dominio/deteccao-risco';
 import { conduzirRefinamento } from '@/lib/ia/refinamento';
 import { ErroConfiguracaoIA, MODELO_CAPAZ } from '@/lib/ia/openrouter';
@@ -97,8 +100,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   await registrarMensagem(id, 'assistente', refinamento.mensagem);
 
-  if (refinamento.novasLacunas.length > 0) {
-    await criarLacunas(id, refinamento.novasLacunas, proximaOrdem(lacunasAtuais));
+  // A resposta do BP pode ter esclarecido outras pendências abertas de passagem. O sinal do
+  // assistente diz quais — e o fechamento grava a resposta REAL dele em cada uma, nunca uma
+  // resposta vazia. É o que mantém o portão fora do alcance do modelo (FR-001, FR-002).
+  const aproveitamento = aproveitarResolucoes({
+    sinais: refinamento.lacunasResolvidas,
+    lacunasDoAtendimento: lacunasAtuais,
+    lacunaRespondidaDiretamente: entrada.lacunaId,
+    conteudoDoBp: textoDoBp,
+  });
+  await fecharLacunasAproveitadas(id, aproveitamento.idsParaFechar, textoDoBp);
+
+  // Releitura obrigatória: o aproveitamento acabou de mudar o estado, e uma proposta pode ser
+  // equivalente justamente à lacuna que ele fechou (contracts/refinamento.md §2).
+  const lacunasParaComparar = (await listarLacunas(id, usuarioId)) ?? [];
+
+  // Sem esta filtragem, uma reformulação do que o BP já respondeu vira pendência nova, com id
+  // novo — e o BP vê o assistente esquecendo o que foi dito (FR-005, FR-006).
+  const { aceitas, descartadas } = filtrarPropostas(
+    refinamento.novasLacunas,
+    lacunasParaComparar.map((l) => l.pergunta),
+  );
+
+  if (aceitas.length > 0) {
+    await criarLacunas(id, aceitas, proximaOrdem(lacunasParaComparar));
   }
 
   // Risco pode aparecer numa resposta, não só no relato inicial.
@@ -134,9 +159,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     });
   }
 
+  // SOMENTE contagens (FR-011, FR-012). Os campos com texto de pergunta ou resposta não são
+  // montados — a proteção é anterior à redação do logger, não dependente dela.
+  //
+  // É daqui que saem SC-002 (criticasAbertas caindo a cada rodada) e SC-008 (deduplicação
+  // agressiva demais aparece como descartadas alto com criticasAbertas despencando).
+  logger.info('refinamento.rodada', {
+    atendimentoId: id,
+    propostas: refinamento.novasLacunas.length,
+    descartadas,
+    fechadasAproveitamento: aproveitamento.idsParaFechar.length,
+    sinaisIgnorados: aproveitamento.ignorados,
+    criticasAbertas: portao.totalCriticasAbertas,
+    apresentadas: portao.apresentadas.length,
+  });
+
   return NextResponse.json({
     mensagem: refinamento.mensagem,
-    lacunasAbertas: portao.pendentes,
+    lacunasAbertas: portao.apresentadas,
     lacunasResolvidas: portao.totalResolvidas,
     prontoParaEntrega: portao.liberada,
     novosEscalonamentos: sinais,

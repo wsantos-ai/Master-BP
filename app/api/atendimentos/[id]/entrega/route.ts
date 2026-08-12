@@ -41,7 +41,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
   // ── Princípio II ──────────────────────────────────────────────────────────
   if (!portao.liberada) {
     return respostaErro('REFINAMENTO_INCOMPLETO', undefined, {
-      lacunasPendentes: portao.pendentes,
+      lacunasPendentes: portao.apresentadas,
     });
   }
   // ──────────────────────────────────────────────────────────────────────────
